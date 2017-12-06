@@ -1,0 +1,164 @@
+<!doctype html>
+<title>Image Retrieval</title>
+<meta charset="utf-8" />
+<script src="/data/static/jquery.min.js"></script>
+<script src="/data/static/jquery-ui.min.js"></script>
+<link rel="stylesheet" href="/data/static/jquery-ui.css" />
+<style>
+  body {
+    margin: auto;
+    padding: 1em;
+    background: black;
+    color: #fff;
+    font: 16px/1.6 menlo, monospace;
+    text-align:center;
+  }
+
+  a {
+    color: #fff;
+  }
+
+  .notice {
+    font-size: 80%%;
+  }
+
+.retrievalblock { 
+    float:left;
+    border:3px solid #F00;
+    margin:4px;
+    width: 224px;
+    height: 224px;
+    padding: 3px;
+} 
+
+.resultblock { 
+    float:left;
+    border:1px solid #00F;
+    margin:4px;
+    height: 224px;
+    padding: 5px;
+}
+
+.resultimage {
+    width: auto;
+    height: auto;
+    max-width: 200px;
+    max-height: 200px;
+}
+
+#status {
+    margin-top: 1px;
+    margin-bottom: 1px;
+}
+
+#drop {
+    font-weight: bold;
+    text-align: center;
+    padding: 1em 0;
+    margin: 1em 0;
+    color: #555;
+    border: 2px dashed #555;
+    border-radius: 7px;
+    cursor: default;
+    margin-top: 1px;
+    margin-bottom: 1px;
+}
+
+#drop.hover {
+    color: #f00;
+    border-color: #f00;
+    border-style: solid;
+    box-shadow: inset 0 3px 4px #888;
+}
+
+</style>
+<fieldset>
+  <p id="status">Select an image</p>
+  <div id="progressbar"></div>
+  <input id="file" type="file" />
+  <div id="drop">or drop image here</div>
+</fieldset>
+<div id="images"></div>
+<script>
+  function sse(imageid) {
+      var url = '/stream/' + imageid;
+      var source = new EventSource(url);
+      source.addEventListener('message', function(e) {
+          if (e.data == '')
+              return;
+          var data = $.parseJSON(e.data);
+          var upload_message = '';
+          var image = $('<img>', {alt: upload_message, src: data['src'], class:'resultimage'});
+          var container = $('<div class=retrievalblock>');
+          container.append($('<div>', {text: upload_message}));
+          container.append(image);
+          $('#images').empty().append(container);
+          resultsize = parseInt(data['resultsize'])
+          for (var i=0;i<resultsize;i++){
+            var tx = $('<span>', {text: data['category'+i.toString()]})
+            var ix = $('<img>', {src:'data/' + data['result'+i.toString()], class:'resultimage'});
+            var cx = $('<div class=resultblock>');
+            cx.append(ix);
+            cx.append('<br>');
+            cx.append(tx);
+            $('#images').append(cx);
+          }
+          e.target.close();
+      });
+  }
+  function file_select_handler(to_upload) {
+      var progressbar = $('#progressbar');
+      var status = $('#status');
+      var xhr = new XMLHttpRequest();
+      xhr.upload.addEventListener('loadstart', function(e1){
+          status.text('uploading image');
+          progressbar.progressbar({max: e1.total});
+      });
+      xhr.upload.addEventListener('progress', function(e1){
+          if (progressbar.progressbar('option', 'max') == 0)
+              progressbar.progressbar('option', 'max', e1.total);
+          progressbar.progressbar('value', e1.loaded);
+      });
+      xhr.onreadystatechange = function(e1) {
+          if (this.readyState == 4)  {
+              if (this.status == 200){
+                  var text = 'upload complete: success';
+                  sse(this.responseText);
+              }
+              else
+                  var text = 'upload failed: code ' + this.status;
+              status.html(text + '. Select another image');
+              progressbar.progressbar('destroy');
+          }
+      };
+      xhr.open('POST', '/post', true);
+      xhr.send(to_upload);
+  };
+  function handle_hover(e) {
+      e.originalEvent.stopPropagation();
+      e.originalEvent.preventDefault();
+      e.target.className = (e.type == 'dragleave' || e.type == 'drop') ? '' : 'hover';
+  }
+
+  $('#drop').bind('drop', function(e) {
+      handle_hover(e);
+      if (e.originalEvent.dataTransfer.files.length < 1) {
+          return;
+      }
+      file_select_handler(e.originalEvent.dataTransfer.files[0]);
+  }).bind('dragenter dragleave dragover', handle_hover);
+  $('#file').change(function(e){
+      file_select_handler(e.target.files[0]);
+      e.target.value = '';
+  });
+
+  var _gaq = _gaq || [];
+  _gaq.push(['_setAccount', 'UA-510348-17']);
+  _gaq.push(['_trackPageview']);
+
+  (function() {
+    var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+    ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+    var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+  })();
+</script>
